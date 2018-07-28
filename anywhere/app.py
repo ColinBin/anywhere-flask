@@ -6,7 +6,7 @@ import os,sys
 import json
 import hashlib
 import flask
-from database import db_session
+from database import db_session, init_db
 from models import *
 from get_location_description import LocationToDescriptionWithBaidu,LocationToDescriptionWithGoogle
 from datetime import datetime
@@ -352,4 +352,5 @@ def get_md5(raw_string):
     return m.hexdigest()
 
 if __name__ == '__main__':
+    init_db()
     app.run(host='0.0.0.0', port=5000)
