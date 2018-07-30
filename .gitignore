@@ -1,4 +1,4 @@
 .idea
 venv/
 .DS_Store
-anywhere/__pycache__/
+**/__pycache__/

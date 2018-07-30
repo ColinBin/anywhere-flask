@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Colin'
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, scoped_session
 
-engine = create_engine('mysql+mysqlconnector://root:root@db:3306/anywhere')
+engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/anywhere')
 
 db_session = scoped_session(sessionmaker(autocommit=False,
                                          autoflush=False,
@@ -12,7 +12,10 @@ db_session = scoped_session(sessionmaker(autocommit=False,
 Base = declarative_base()
 Base.query = db_session.query_property()
 
+
 def init_db():
-    import models
     Base.metadata.create_all(bind=engine)
 
+
+if __name__ == "__main__":
+    Base.metadata.create_all(bind=engine)
