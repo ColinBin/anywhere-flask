@@ -10,7 +10,7 @@ LOCATION_DESCRIPTION_SERVICE_UNAVAILABLE = 81
 
 POST_CIPHER_WRONG = 111
 
-code_desc = {
+error_desc = {
     USER_NOT_FOUND: "User is not found",
     PASSWORD_WRONG: "Password is wrong",
     USER_ALREADY_EXIST: "User already exists",

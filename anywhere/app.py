@@ -1,21 +1,20 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Colin'
-import hashlib
 import os
 import sys
 
 import flask
-from flask import Flask
-from flask import request
+from flask import Flask, request, session
 
 from db.database import db_session, init_db
 from db.models import *
 from util.cal_dist import haversine
-from util.get_location_description import LocationToDescriptionWithBaidu, location_to_description
+from util.get_location_description import location_to_description
 from constants import *
 from util.res_json_gen import *
 
 app = Flask(__name__)
+app.secret_key = "faffagavvqrq;van;.;vzvqpjoi94751[jz0v"
 
 
 @app.route('/login', methods=['POST'])
@@ -26,11 +25,12 @@ def login():
     if user_found is None:
         app.logger.info("%s failed to login (%d)", user_id, USER_NOT_FOUND)
         return gen_json_failure(USER_NOT_FOUND)
-    elif password != get_md5(user_found.password):
+    elif password != user_found.password:
         app.logger.info("%s failed to login (%d)", user_id, PASSWORD_WRONG)
         return gen_json_failure(PASSWORD_WRONG)
     else:
         app.logger.info("%s login successfully.", user_id)
+        session["user_id"] = user_id
         return gen_json_success(user_found.as_dict())
 
 
@@ -46,7 +46,7 @@ def signup():
         return gen_json_failure(USER_ALREADY_EXIST)
     else:
         new_user = User(user_id=user_id, password=password, email=email, username=username,
-                       create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                        create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         db_session.add(new_user)
         db_session.commit()
         app.logger.info("User %s signup successfully.", user_id)
@@ -85,7 +85,7 @@ def alter_password():
     original_password = request.form['original_password']
     new_password = request.form['new_password']
     user_found = db_session.query(User).filter(User.user_id == user_id).first()
-    if original_password == get_md5(user_found.password):
+    if original_password == user_found.password:
         user_found.password = new_password
         db_session.commit()
         app.logger.info("User %s altered password successfully.", user_id)
@@ -124,8 +124,8 @@ def create_post():
     cipher = request.form['post_cipher']
     has_picture = request.form['has_picture']
     new_post = Post(title=title, content=content, location_description=location_description, longitude=longitude,
-                   latitude=latitude, style=style, has_cipher=has_cipher, has_picture=has_picture, cipher=cipher,
-                   create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                    latitude=latitude, style=style, has_cipher=has_cipher, has_picture=has_picture, cipher=cipher,
+                    create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     db_session.add(new_post)
     user.posts.append(new_post)
     db_session.commit()
@@ -285,12 +285,6 @@ def dislike_post():
         db_session.commit()
         data = {"dislike_post": False}
     return gen_json_success(data)
-
-
-def get_md5(raw_string):
-    m = hashlib.md5()
-    m.update(raw_string.encode('utf-8'))
-    return m.hexdigest()
 
 
 if __name__ == '__main__':

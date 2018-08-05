@@ -18,4 +18,5 @@ def init_db():
 
 
 if __name__ == "__main__":
+    import db.models
     Base.metadata.create_all(bind=engine)

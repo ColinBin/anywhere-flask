@@ -9,7 +9,7 @@ from db.database import Base
 class User(Base):
     __tablename__ = 'user'
     user_id = Column(String(20), primary_key=True, index=True)
-    password = Column(String(20))
+    password = Column(String(70))
     username = Column(String(50))
     email = Column(String(40))
     has_avatar = Column(SmallInteger, default=0)
