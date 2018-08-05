@@ -17,6 +17,12 @@ app = Flask(__name__)
 app.secret_key = "faffagavvqrq;van;.;vzvqpjoi94751[jz0v"
 
 
+@app.before_request
+def before_request():
+    if 'user_id' not in session and request.endpoint != 'login':
+        return gen_json_failure(OUTDATED_SESSION)
+
+
 @app.route('/login', methods=['POST'])
 def login():
     user_id = request.form['user_id']

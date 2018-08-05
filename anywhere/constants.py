@@ -1,6 +1,8 @@
 SUCCESS = 1
 FAILURE = 0
 
+OUTDATED_SESSION = 11
+
 USER_NOT_FOUND = 41
 PASSWORD_WRONG = 42
 
@@ -16,5 +18,6 @@ error_desc = {
     USER_ALREADY_EXIST: "User already exists",
     LOCATION_DESCRIPTION_SERVICE_UNAVAILABLE: "Location description is not available",
     POST_CIPHER_WRONG: "Wrong cipher",
+    OUTDATED_SESSION: "Session is outdated"
 }
 
