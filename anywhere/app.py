@@ -9,9 +9,10 @@ from flask import Flask, request, session
 from constants import *
 from db.database import db_session, init_db
 from db.models import *
-from util.cal_dist import haversine
-from util.get_location_description import location_to_description
-from util.res_json_gen import *
+from util.bound_calculator import get_bound
+from util.distance_calculator import haversine
+from util.location_description_fetcher import location_to_description
+from util.res_json_generator import *
 
 app = Flask(__name__)
 app.secret_key = "faffagavvqrq;van;.;vzvqpjoi94751[jz0v"
@@ -160,13 +161,12 @@ def create_post():
 def get_posts():
     longitude = request.form['longitude']
     latitude = request.form['latitude']
-    location_description = location_to_description(longitude, latitude)
+    bound = get_bound(float(latitude), float(longitude), 0.5)
+
+    posts = db_session.query(Post).filter(Post.longitude.between(bound['lon_lower_bound'], bound['lon_upper_bound']) & Post.latitude.between(bound[
+            'lat_lower_bound'], bound['lat_upper_bound']))
+    print(bound)
     data = dict()
-    if location_description is None:
-        data['location_description'] = ''
-    else:
-        data['location_description'] = location_description
-    posts = db_session.query(Post).all()
     data['posts'] = []
     for post in posts:
         if haversine(float(longitude), float(latitude), float(post.longitude), float(post.latitude)) < 500:

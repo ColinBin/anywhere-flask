@@ -28,8 +28,8 @@ class Post(Base):
     # location related information
     location_description = Column(String(70))
 
-    longitude = Column(REAL)
-    latitude = Column(REAL)
+    longitude = Column(REAL, index=True)
+    latitude = Column(REAL, index=True)
 
     style = Column(Integer)
     like_number = Column(Integer, default=0)
