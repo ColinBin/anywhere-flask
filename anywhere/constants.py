@@ -2,6 +2,7 @@ SUCCESS = 1
 FAILURE = 0
 
 OUTDATED_SESSION = 11
+INSUFFICIENT_FIELDS = 12
 
 USER_NOT_FOUND = 41
 PASSWORD_WRONG = 42
@@ -20,4 +21,3 @@ error_desc = {
     POST_CIPHER_WRONG: "Wrong cipher",
     OUTDATED_SESSION: "Session is outdated"
 }
-

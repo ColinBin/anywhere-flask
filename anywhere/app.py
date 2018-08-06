@@ -6,11 +6,11 @@ import sys
 import flask
 from flask import Flask, request, session
 
+from constants import *
 from db.database import db_session, init_db
 from db.models import *
 from util.cal_dist import haversine
 from util.get_location_description import location_to_description
-from constants import *
 from util.res_json_gen import *
 
 app = Flask(__name__)
@@ -19,7 +19,7 @@ app.secret_key = "faffagavvqrq;van;.;vzvqpjoi94751[jz0v"
 
 @app.before_request
 def before_request():
-    if 'user_id' not in session and request.endpoint != 'login':
+    if 'user_id' not in session and request.endpoint not in {'login', 'signup'}:
         return gen_json_failure(OUTDATED_SESSION)
 
 
@@ -61,7 +61,7 @@ def signup():
 
 @app.route('/get_avatar', methods=['POST'])
 def get_avatar():
-    user_id = request.form['user_id']
+    user_id = session['user_id']
     avatar_path = sys.path[0] + '/avatar/' + user_id + '.png'
     if os.path.exists(avatar_path):
         app.logger.info("%s Avatar file sent.", avatar_path)
@@ -72,8 +72,9 @@ def get_avatar():
 
 @app.route('/alter_basic_information', methods=['POST'])
 def alter_basic_information():
-    user_id = request.form['user_id']
+    user_id = session['user_id']
     user = db_session.query(User).filter(User.user_id == user_id).first()
+
     user.username = request.form['username']
     user.email = request.form['email']
     if request.form['has_altered_avatar'] == '1':
@@ -85,9 +86,17 @@ def alter_basic_information():
     return gen_json_success(None)
 
 
+@app.route('/get_basic_information', methods=['POST'])
+def get_basic_information():
+    user_id = session['user_id']
+    user = db_session.query(User).filter(User.user_id == user_id).first()
+
+    return gen_json_success(user.as_dict())
+
+
 @app.route('/alter_password', methods=['POST'])
 def alter_password():
-    user_id = request.form['user_id']
+    user_id = session['user_id']
     original_password = request.form['original_password']
     new_password = request.form['new_password']
     user_found = db_session.query(User).filter(User.user_id == user_id).first()
@@ -105,20 +114,24 @@ def alter_password():
 def get_location_description():
     longitude = request.form['longitude']
     latitude = request.form['latitude']
-    location_description = location_to_description(longitude, latitude)
-    if location_description is not None:
+    resp_data = location_to_description(longitude, latitude)
+    if resp_data is not None:
+        if resp_data['status'] != 'OK':
+            app.logger.info("Failed to get location description, API status %s.", resp_data['status'])
+            return gen_json_failure(LOCATION_DESCRIPTION_SERVICE_UNAVAILABLE)
         data = dict()
-        data['location_description'] = location_description
+        data['location_description'] = resp_data['results'][0]['formatted_address']
         app.logger.info("Getting location description successfully (%.2f, %.2f)", longitude, latitude)
         return gen_json_success(data)
     else:
-        app.logger.info("Failed to get location description (%.2f, %.2f). (%d)", longitude, latitude, PASSWORD_WRONG)
+        app.logger.info("Failed to get location description (%.2f, %.2f). (%d)", longitude, latitude,
+                        LOCATION_DESCRIPTION_SERVICE_UNAVAILABLE)
         return gen_json_failure(LOCATION_DESCRIPTION_SERVICE_UNAVAILABLE)
 
 
 @app.route('/create_post', methods=['POST'])
 def create_post():
-    user_id = request.form['user_id']
+    user_id = session['user_id']
     user = db_session.query(User).filter(User.user_id == user_id).first()
     title = request.form['post_title']
     content = request.form['post_content']
@@ -165,7 +178,7 @@ def get_posts():
 @app.route('/get_post_detail', methods=['POST'])
 def get_post_detail():
     post_id = request.form['post_id']
-    user_id = request.form['user_id']
+    user_id = session['user_id']
     post = db_session.query(Post).filter(Post.post_id == post_id).first()
 
     if request.form['has_cipher'] == "1" and post.cipher != request.form['cipher']:
@@ -217,7 +230,7 @@ def get_comments():
 
 @app.route('/add_comment', methods=['POST'])
 def add_comment():
-    user_id = request.form['user_id']
+    user_id = session['user_id']
     post_id = request.form['post_id']
     user = db_session.query(User).filter(User.user_id == user_id).first()
     post = db_session.query(Post).filter(Post.post_id == post_id).first()
@@ -234,12 +247,12 @@ def add_comment():
 
 @app.route('/like_post', methods=['POST'])
 def like_post():
-    user_id = request.form['user_id']
+    user_id = session['user_id']
     post_id = request.form['post_id']
-    has_liked = request.form['has_liked']
     user = db_session.query(User).filter(User.user_id == user_id).first()
     post = db_session.query(Post).filter(Post.post_id == post_id).first()
-    if has_liked == '1':
+    like_found = db_session.query(Like).filter(Like.post_id == post_id and Like.user_id == user_id).first()
+    if like_found is None:
         new_like = Like()
         user.user_likes.append(new_like)
         post.post_likes.append(new_like)
@@ -264,13 +277,13 @@ def like_post():
 
 @app.route('/dislike_post', methods=['POST'])
 def dislike_post():
-    user_id = request.form['user_id']
+    user_id = session['user_id']
     post_id = request.form['post_id']
-    new_disliked = request.form['new_disliked']
     user = db_session.query(User).filter(User.user_id == user_id).first()
     post = db_session.query(Post).filter(Post.post_id == post_id).first()
+    dislike_found = db_session.query(Dislike).filter(Dislike.post_id == post_id and Dislike.user_id == user_id).first()
 
-    if new_disliked == '1':
+    if dislike_found is None:
         new_dislike = Dislike()
         user.user_dislikes.append(new_dislike)
         post.post_dislikes.append(new_dislike)

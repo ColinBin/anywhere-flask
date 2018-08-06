@@ -3,8 +3,10 @@ __author__ = 'Colin'
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, scoped_session
+from config import *
 
-engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/anywhere')
+
+engine = create_engine('mysql+mysqlconnector://' + DB_USER + ":" + DB_PASS + "@" + HOST_NAME + ":" + DB_PORT + "/" + DB_NAME)
 
 db_session = scoped_session(sessionmaker(autocommit=False,
                                          autoflush=False,

@@ -1,5 +1,6 @@
-from constants import SUCCESS, FAILURE, error_desc
 import json
+
+from constants import SUCCESS, FAILURE, error_desc
 
 
 def gen_json_success(data=None):
