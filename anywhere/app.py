@@ -60,18 +60,26 @@ def signup():
         return gen_json_success(None)
 
 
-@app.route('/get_avatar', methods=['POST'])
-def get_avatar():
-    user_id = session['user_id']
-    avatar_path = sys.path[0] + '/avatar/' + user_id + '.png'
-    if os.path.exists(avatar_path):
-        app.logger.info("%s Avatar file sent.", avatar_path)
-        return flask.send_file('avatar/' + user_id + '.png')
-    else:
-        return ""
+@app.route('/avatar', methods=['GET'])
+def avatar():
+    if request.method == "GET":
+        user_id = session['user_id']
+        avatar_path = sys.path[0] + '/avatar/' + user_id + '.png'
+        if os.path.exists(avatar_path):
+            app.logger.info("%s Avatar file sent.", avatar_path)
+            return flask.send_file('avatar/' + user_id + '.png')
+        else:
+            return ""
 
 
-@app.route('/alter_basic_information', methods=['POST'])
+@app.route('/basic_information', methods=['GET', 'PUT'])
+def basic_information():
+    if request.method == "PUT":
+        return alter_basic_information()
+    elif request.method == "GET":
+        return get_basic_information()
+
+
 def alter_basic_information():
     user_id = session['user_id']
     user = db_session.query(User).filter(User.user_id == user_id).first()
@@ -87,7 +95,6 @@ def alter_basic_information():
     return gen_json_success(None)
 
 
-@app.route('/get_basic_information', methods=['POST'])
 def get_basic_information():
     user_id = session['user_id']
     user = db_session.query(User).filter(User.user_id == user_id).first()
@@ -95,42 +102,51 @@ def get_basic_information():
     return gen_json_success(user.as_dict())
 
 
-@app.route('/alter_password', methods=['POST'])
-def alter_password():
-    user_id = session['user_id']
-    original_password = request.form['original_password']
-    new_password = request.form['new_password']
-    user_found = db_session.query(User).filter(User.user_id == user_id).first()
-    if original_password == user_found.password:
-        user_found.password = new_password
-        db_session.commit()
-        app.logger.info("User %s altered password successfully.", user_id)
-        return gen_json_success(None)
-    else:
-        app.logger.info("User %s alter password failure. (%d)", user_id, PASSWORD_WRONG)
-        return gen_json_failure(PASSWORD_WRONG)
+@app.route('/password', methods=['PUT'])
+def password():
+    if request.method == "PUT":
+        user_id = session['user_id']
+        old_password = request.form['old_password']
+        new_password = request.form['new_password']
+        user_found = db_session.query(User).filter(User.user_id == user_id).first()
+        if old_password == user_found.password:
+            user_found.password = new_password
+            db_session.commit()
+            app.logger.info("User %s altered password successfully.", user_id)
+            return gen_json_success(None)
+        else:
+            app.logger.info("User %s alter password failure. (%d)", user_id, PASSWORD_WRONG)
+            return gen_json_failure(PASSWORD_WRONG)
 
 
-@app.route('/get_location_description', methods=['POST'])
-def get_location_description():
-    longitude = request.form['longitude']
-    latitude = request.form['latitude']
-    resp_data = location_to_description(longitude, latitude)
-    if resp_data is not None:
-        if resp_data['status'] != 'OK':
-            app.logger.info("Failed to get location description, API status %s.", resp_data['status'])
+@app.route('/location_description', methods=['GET'])
+def location_description():
+    if request.method == "GET":
+        longitude = request.args.get("longitude")
+        latitude = request.args.get('latitude')
+        resp_data = location_to_description(longitude, latitude)
+        if resp_data is not None:
+            if resp_data['status'] != 'OK':
+                app.logger.info("Failed to get location description, API status %s.", resp_data['status'])
+                return gen_json_failure(LOCATION_DESCRIPTION_SERVICE_UNAVAILABLE)
+            data = dict()
+            data['location_description'] = resp_data['results'][0]['formatted_address']
+            app.logger.info("Getting location description successfully (%.2f, %.2f)", longitude, latitude)
+            return gen_json_success(data)
+        else:
+            app.logger.info("Failed to get location description (%.2f, %.2f). (%d)", longitude, latitude,
+                            LOCATION_DESCRIPTION_SERVICE_UNAVAILABLE)
             return gen_json_failure(LOCATION_DESCRIPTION_SERVICE_UNAVAILABLE)
-        data = dict()
-        data['location_description'] = resp_data['results'][0]['formatted_address']
-        app.logger.info("Getting location description successfully (%.2f, %.2f)", longitude, latitude)
-        return gen_json_success(data)
-    else:
-        app.logger.info("Failed to get location description (%.2f, %.2f). (%d)", longitude, latitude,
-                        LOCATION_DESCRIPTION_SERVICE_UNAVAILABLE)
-        return gen_json_failure(LOCATION_DESCRIPTION_SERVICE_UNAVAILABLE)
 
 
-@app.route('/create_post', methods=['POST'])
+@app.route('/posts', methods=['POST', 'GET'])
+def posts():
+    if request.method == "POST":
+        return create_post()
+    elif request.method == "GET":
+        return get_posts()
+
+
 def create_post():
     user_id = session['user_id']
     user = db_session.query(User).filter(User.user_id == user_id).first()
@@ -157,14 +173,16 @@ def create_post():
     return gen_json_success(None)
 
 
-@app.route('/get_posts', methods=['POST'])
 def get_posts():
-    longitude = request.form['longitude']
-    latitude = request.form['latitude']
+    longitude = request.args.get('longitude')
+    latitude = request.args.get('latitude')
     bound = get_bound(float(latitude), float(longitude), 0.5)
 
-    posts = db_session.query(Post).filter(Post.longitude.between(bound['lon_lower_bound'], bound['lon_upper_bound']) & Post.latitude.between(bound[
-            'lat_lower_bound'], bound['lat_upper_bound']))
+    posts = db_session.query(Post).filter(
+        Post.longitude.between(bound['lon_lower_bound'], bound['lon_upper_bound']) & Post.latitude.between(bound[
+                                                                                                               'lat_lower_bound'],
+                                                                                                           bound[
+                                                                                                               'lat_upper_bound']))
     print(bound)
     data = dict()
     data['posts'] = []
@@ -175,50 +193,58 @@ def get_posts():
     return gen_json_success(data)
 
 
-@app.route('/get_post_detail', methods=['POST'])
-def get_post_detail():
-    post_id = request.form['post_id']
-    user_id = session['user_id']
-    post = db_session.query(Post).filter(Post.post_id == post_id).first()
+@app.route('/posts/<int:post_id>', methods=['GET'])
+def get_post(post_id):
+    if request.method == "GET":
+        user_id = session['user_id']
+        post = db_session.query(Post).filter(Post.post_id == post_id).first()
 
-    if request.form['has_cipher'] == "1" and post.cipher != request.form['cipher']:
-        app.logger.info("User %s failed to get post detail. (%d)", user_id, POST_CIPHER_WRONG)
-        return gen_json_failure(POST_CIPHER_WRONG)
-    data = {"post": post.as_dict()}
-    # 是否已点赞
-    likes = post.post_likes
-    for like in likes:
-        if like.user_id == user_id:
-            data['has_liked'] = 1
-            break
-    else:
-        data['has_liked'] = 0
-    # 是否已点踩
-    dislikes = post.post_dislikes
-    for dislike in dislikes:
-        if dislike.user_id == user_id:
-            data['has_disliked'] = 1
-            break
-    else:
-        data['has_disliked'] = 0
-    app.logger.info("User %s got post detail.", user_id)
-    return gen_json_success(data)
-
-
-@app.route('/get_post_picture', methods=['POST'])
-def get_post_picture():
-    post_id = request.form['post_id']
-    post_picture_path = sys.path[0] + '/post_picture/' + str(post_id) + '.png'
-    if os.path.exists(post_picture_path):
-        app.logger.info("Post pic sent. %s", post_picture_path)
-        return flask.send_file('post_picture/' + str(post_id) + '.png')
-    else:
-        return ""
+        if request.args.get('has_cipher') == "1" and post.cipher != request.args.get('cipher'):
+            app.logger.info("User %s failed to get post detail. (%d)", user_id, POST_CIPHER_WRONG)
+            return gen_json_failure(POST_CIPHER_WRONG)
+        data = {"post": post.as_dict()}
+        # 是否已点赞
+        likes = post.post_likes
+        for like in likes:
+            if like.user_id == user_id:
+                data['has_liked'] = 1
+                break
+        else:
+            data['has_liked'] = 0
+        # 是否已点踩
+        dislikes = post.post_dislikes
+        for dislike in dislikes:
+            if dislike.user_id == user_id:
+                data['has_disliked'] = 1
+                break
+        else:
+            data['has_disliked'] = 0
+        app.logger.info("User %s got post detail.", user_id)
+        return gen_json_success(data)
 
 
-@app.route('/get_comments', methods=['POST'])
+@app.route('/post_picture', methods=['GET'])
+def post_picture():
+    if request.method == "GET":
+        post_id = request.args.get('post_id')
+        post_picture_path = sys.path[0] + '/post_picture/' + str(post_id) + '.png'
+        if os.path.exists(post_picture_path):
+            app.logger.info("Post pic sent. %s", post_picture_path)
+            return flask.send_file('post_picture/' + str(post_id) + '.png')
+        else:
+            return ""
+
+
+@app.route('/comments', methods=['POST', "GET"])
+def comments():
+    if request.method == "POST":
+        return add_comment()
+    elif request.method == "GET":
+        return get_comments()
+
+
 def get_comments():
-    post_id = request.form['post_id']
+    post_id = request.args.get('post_id')
     post = db_session.query(Post).filter(Post.post_id == post_id).first()
     comments = post.post_comments
     comment_list = []
@@ -228,7 +254,6 @@ def get_comments():
     return gen_json_success(data)
 
 
-@app.route('/add_comment', methods=['POST'])
 def add_comment():
     user_id = session['user_id']
     post_id = request.form['post_id']
@@ -245,65 +270,68 @@ def add_comment():
     return gen_json_success(data)
 
 
-@app.route('/like_post', methods=['POST'])
-def like_post():
-    user_id = session['user_id']
-    post_id = request.form['post_id']
-    user = db_session.query(User).filter(User.user_id == user_id).first()
-    post = db_session.query(Post).filter(Post.post_id == post_id).first()
-    like_found = db_session.query(Like).filter(Like.post_id == post_id and Like.user_id == user_id).first()
-    if like_found is None:
-        new_like = Like()
-        user.user_likes.append(new_like)
-        post.post_likes.append(new_like)
-        post.like_number += 1
-        db_session.add(new_like)
-        # remove old dislike
-        old_dislike = db_session.query(Dislike).filter(
+@app.route('/likes', methods=['PUT'])
+def likes():
+    if request.method == "PUT":
+        user_id = session['user_id']
+        post_id = request.form['post_id']
+        user = db_session.query(User).filter(User.user_id == user_id).first()
+        post = db_session.query(Post).filter(Post.post_id == post_id).first()
+        like_found = db_session.query(Like).filter(Like.post_id == post_id and Like.user_id == user_id).first()
+        if like_found is None:
+            new_like = Like()
+            user.user_likes.append(new_like)
+            post.post_likes.append(new_like)
+            post.like_number += 1
+            db_session.add(new_like)
+            # remove old dislike
+            old_dislike = db_session.query(Dislike).filter(
+                Dislike.post_id == post_id and Dislike.user_id == user_id).first()
+            if old_dislike is not None:
+                db_session.delete(old_dislike)
+                post.dislike_number -= 1
+            db_session.commit()
+            data = {"like_post": True}
+        else:
+            like = db_session.query(Like).filter(Like.post_id == post_id and Like.user_id == user_id).first()
+            db_session.delete(like)
+            post.like_number = post.like_number - 1
+            db_session.commit()
+            data = {"like_post": False}
+        return gen_json_success(data)
+
+
+@app.route('/dislikes', methods=['PUT'])
+def dislikes():
+    if request.method == "PUT":
+        user_id = session['user_id']
+        post_id = request.form['post_id']
+        user = db_session.query(User).filter(User.user_id == user_id).first()
+        post = db_session.query(Post).filter(Post.post_id == post_id).first()
+        dislike_found = db_session.query(Dislike).filter(
             Dislike.post_id == post_id and Dislike.user_id == user_id).first()
-        if old_dislike is not None:
-            db_session.delete(old_dislike)
+
+        if dislike_found is None:
+            new_dislike = Dislike()
+            user.user_dislikes.append(new_dislike)
+            post.post_dislikes.append(new_dislike)
+            post.dislike_number += 1
+            db_session.add(new_dislike)
+            # remove old like
+            old_like = db_session.query(Like).filter(Like.post_id == post_id and Like.user_id == user_id).first()
+            if old_like is not None:
+                db_session.delete(old_like)
+                post.like_number -= 1
+            db_session.commit()
+            data = {"dislike_post": True}
+        else:
+            dislike = db_session.query(Dislike).filter(
+                Dislike.post_id == post_id and Dislike.user_id == user_id).first()
             post.dislike_number -= 1
-        db_session.commit()
-        data = {"like_post": True}
-    else:
-        like = db_session.query(Like).filter(Like.post_id == post_id and Like.user_id == user_id).first()
-        db_session.delete(like)
-        post.like_number = post.like_number - 1
-        db_session.commit()
-        data = {"like_post": False}
-    return gen_json_success(data)
-
-
-@app.route('/dislike_post', methods=['POST'])
-def dislike_post():
-    user_id = session['user_id']
-    post_id = request.form['post_id']
-    user = db_session.query(User).filter(User.user_id == user_id).first()
-    post = db_session.query(Post).filter(Post.post_id == post_id).first()
-    dislike_found = db_session.query(Dislike).filter(Dislike.post_id == post_id and Dislike.user_id == user_id).first()
-
-    if dislike_found is None:
-        new_dislike = Dislike()
-        user.user_dislikes.append(new_dislike)
-        post.post_dislikes.append(new_dislike)
-        post.dislike_number += 1
-        db_session.add(new_dislike)
-        # remove old like
-        old_like = db_session.query(Like).filter(Like.post_id == post_id and Like.user_id == user_id).first()
-        if old_like is not None:
-            db_session.delete(old_like)
-            post.like_number -= 1
-        db_session.commit()
-        data = {"dislike_post": True}
-    else:
-        dislike = db_session.query(Dislike).filter(
-            Dislike.post_id == post_id and Dislike.user_id == user_id).first()
-        post.dislike_number -= 1
-        db_session.delete(dislike)
-        db_session.commit()
-        data = {"dislike_post": False}
-    return gen_json_success(data)
+            db_session.delete(dislike)
+            db_session.commit()
+            data = {"dislike_post": False}
+        return gen_json_success(data)
 
 
 if __name__ == '__main__':

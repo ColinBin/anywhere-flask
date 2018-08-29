@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+from urllib.parse import urlencode
 
 import pytest
 from werkzeug.http import parse_cookie
@@ -134,7 +135,7 @@ def test_login(client):
 
 def test_get_basic_information(client):
     signup_and_login(client)
-    res = client.post('/get_basic_information')
+    res = client.get('/basic_information')
     assert entity_info_match(res, user_test_case)
 
 
@@ -143,9 +144,9 @@ def test_alter_basic_information(client):
     new_email = "new_" + user_test_case['email']
     altered_info = dict(user_id=user_test_case['user_id'], username=user_test_case['username'], email=new_email,
                         has_altered_avatar='0')
-    res = client.post('/alter_basic_information', data=altered_info)
+    res = client.put('/basic_information', data=altered_info)
     assert null_data(get_json(res))
-    res = client.post('/get_basic_information')
+    res = client.get('/basic_information')
     assert entity_info_match(res, {key: value for (key, value) in altered_info.items() if key != 'has_altered_avatar'})
     user_test_case['email'] = new_email
 
@@ -153,11 +154,11 @@ def test_alter_basic_information(client):
 def test_alter_password(client):
     signup_and_login(client)
     new_pass = get_random_sha()
-    res = client.post('/alter_password',
-                      data={'original_password': user_signup_test_case['password'] + "1", 'new_password': new_pass})
+    res = client.put('/password',
+                     data={'old_password': user_signup_test_case['password'] + "1", 'new_password': new_pass})
     assert errcode(get_json(res), PASSWORD_WRONG)
-    res = client.post('/alter_password',
-                      data={'original_password': user_signup_test_case['password'], 'new_password': new_pass})
+    res = client.put('/password',
+                     data={'old_password': user_signup_test_case['password'], 'new_password': new_pass})
     assert null_data(get_json(res))
 
     old_pass = user_signup_test_case['password']
@@ -173,52 +174,49 @@ def test_alter_password(client):
 
 def test_get_location_description(client):
     signup_and_login(client)
-    res = client.post('/get_location_description', data=dict(longitude=181.0, latitude=39.0))
+    res = client.get('/location_description?' + urlencode(dict(longitude=500.0, latitude=39.0)))
     assert errcode(get_json(res), LOCATION_DESCRIPTION_SERVICE_UNAVAILABLE)
-    res = client.post('/get_location_description', data=dict(longitude=116.0, latitude=39.0))
-    assert status_success(get_json(res)) and ~null_data(get_json(res))
+    # res = client.get('/location_description?' + urlencode(dict(longitude=116.0, latitude=39.0)))
+    # assert status_success(get_json(res)) and ~null_data(get_json(res))
 
 
 def test_post(client):
     signup_and_login(client)
-    res = client.post('/create_post', data=new_post_test_case)
+    res = client.post('/posts', data=new_post_test_case)
     assert null_data(get_json(res))
 
-    res = client.post('/get_posts',
-                      data=dict(longitude=new_post_test_case['longitude'], latitude=new_post_test_case['latitude']))
+    res = client.get(
+        '/posts?' + urlencode(dict(longitude=new_post_test_case['longitude'], latitude=new_post_test_case['latitude'])))
     assert status_success(get_json(res)) and ~null_data(get_json(res)) and len(get_json(res)['data']['posts']) == 1
 
     post_id = get_json(res)['data']['posts'][0]['post_id']
 
-    res = client.post('/get_post_detail',
-                      data=dict(post_id=post_id, has_cipher=new_post_test_case['has_cipher']))
+    res = client.get('/posts/' + str(post_id) + "?" + urlencode(dict(has_cipher=new_post_test_case['has_cipher'])))
     assert status_success(get_json(res)) and ~null_data(get_json(res)) and get_json(res)['data']['post'] is not None
 
-    res = client.post('/get_comments',
-                      data=dict(post_id=post_id))
+    res = client.get('/comments?' + urlencode(dict(post_id=post_id)))
     assert status_success(get_json(res)) and ~null_data(get_json(res)) and len(get_json(res)['data']['comments']) == 0
 
-    res = client.post('/add_comment',
+    res = client.post('/comments',
                       data=dict(post_id=post_id, comment_content="This is Test Comment."))
     assert status_success(get_json(res)) and ~null_data(get_json(res))
 
-    res = client.post('/get_comments',
-                      data=dict(post_id=post_id))
+    res = client.get('/comments?' + urlencode(dict(post_id=post_id)))
     assert status_success(get_json(res)) and ~null_data(get_json(res)) and len(get_json(res)['data']['comments']) == 1
 
-    res = client.post('/like_post',
-                      data=dict(post_id=post_id))
+    res = client.put('/likes',
+                     data=dict(post_id=post_id))
     assert status_success(get_json(res)) and ~null_data(get_json(res)) and get_json(res)['data']['like_post'] is True
 
-    res = client.post('/like_post',
-                      data=dict(post_id=post_id))
+    res = client.put('/likes',
+                     data=dict(post_id=post_id))
     assert status_success(get_json(res)) and ~null_data(get_json(res)) and get_json(res)['data']['like_post'] is False
 
-    res = client.post('/dislike_post',
-                      data=dict(post_id=post_id))
+    res = client.put('/dislikes',
+                     data=dict(post_id=post_id))
     assert status_success(get_json(res)) and ~null_data(get_json(res)) and get_json(res)['data']['dislike_post'] is True
 
-    res = client.post('/dislike_post',
-                      data=dict(post_id=post_id))
+    res = client.put('/dislikes',
+                     data=dict(post_id=post_id))
     assert status_success(get_json(res)) and ~null_data(get_json(res)) and get_json(res)['data'][
         'dislike_post'] is False
